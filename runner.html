@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Multiverse Runner - Викинги | Киберпанк | Минимализм</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;800&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            background-color: #05070f;
+            color: #f8fafc;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Dynamic Theme Fonts & Styles */
+        .theme-cyber { font-family: 'Orbitron', sans-serif; }
+        .theme-viking { font-family: 'Cinzel', serif; }
+        .theme-minimal { font-family: 'Inter', sans-serif; }
+
+        .glass-panel {
+            background: rgba(13, 17, 30, 0.82);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+
+        /* Splash text pulse animation */
+        @keyframes splashPulse {
+            0%, 100% { transform: scale(1) rotate(-3deg); }
+            50% { transform: scale(1.08) rotate(-1deg); }
+        }
+        .splash-text {
+            animation: splashPulse 2s infinite ease-in-out;
+            display: inline-block;
+        }
+
+        .shake {
+            animation: shake 0.25s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-3px, -2px, 0); }
+            20%, 80% { transform: translate3d(5px, 3px, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 4px, 0); }
+            40%, 60% { transform: translate3d(6px, -3px, 0); }
+        }
+
+        /* Menu Button Hover FX */
+        .btn-menu {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-menu:hover {
+            transform: translateY(-2px) scale(1.02);
+        }
+        .btn-menu:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        #gameCanvas {
+            border-radius: 16px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between items-center p-2 sm:p-4 font-sans select-none overflow-hidden">
+
+    <!-- Header HUD -->
+    <header class="w-full max-w-5xl flex justify-between items-center z-20 px-2 py-1">
+        <div class="flex items-center gap-3">
+            <div id="themeIcon" class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400 text-xl shadow-lg">
+                <i class="fa-solid fa-gamepad"></i>
+            </div>
+            <div>
+                <h1 id="appTitle" class="font-bold text-lg sm:text-xl tracking-wider text-white">
+                    RUNNER<span id="appSubTitle" class="text-cyan-400">GAME</span>
+                </h1>
+                <p id="difficultyBadge" class="text-[10px] text-slate-400 font-semibold tracking-widest uppercase">Сложность: Средняя</p>
+            </div>
+        </div>
+
+        <!-- Scores HUD -->
+        <div id="hudScore" class="flex items-center gap-4 sm:gap-8 glass-panel px-5 py-1.5 rounded-full">
+            <div class="text-center">
+                <span class="text-[10px] font-bold text-slate-400 block tracking-wider uppercase">Рекорд</span>
+                <span id="scoreHigh" class="font-bold text-lg text-amber-400">00000</span>
+            </div>
+            <div class="w-px h-6 bg-slate-700"></div>
+            <div class="text-center">
+                <span class="text-[10px] font-bold text-cyan-400 block tracking-wider uppercase">Счет</span>
+                <span id="scoreCurrent" class="font-bold text-xl text-white">00000</span>
+            </div>
+        </div>
+
+        <!-- Audio & Pause Controls -->
+        <div class="flex items-center gap-2">
+            <button id="btnSound" class="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-300 hover:text-white transition active:scale-95">
+                <i class="fa-solid fa-volume-high text-sm"></i>
+            </button>
+            <button id="btnPause" class="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-300 hover:text-white transition active:scale-95">
+                <i class="fa-solid fa-pause text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Canvas Play Area -->
+    <main id="canvasContainer" class="relative w-full max-w-5xl flex-1 flex items-center justify-center my-2">
+        <canvas id="gameCanvas" class="w-full h-full object-contain"></canvas>
+
+        <!-- Active Power-up HUD -->
+        <div id="powerupBar" class="absolute top-4 left-4 flex gap-2 z-10 pointer-events-none"></div>
+
+        <!-- ================= MAIN MENU OVERLAY ================= -->
+        <div id="menuOverlay" class="absolute inset-0 glass-panel rounded-2xl flex flex-col items-center justify-center p-6 z-30 transition-all duration-300">
+            <div class="text-center max-w-md w-full flex flex-col items-center">
+                
+                <!-- Main Title & Animated Splash -->
+                <div class="relative mb-6">
+                    <h2 id="mainTitleText" class="text-4xl sm:text-6xl font-black tracking-wider text-white drop-shadow-md">
+                        CYBER RUNNER
+                    </h2>
+                    <span id="splashText" class="splash-text absolute -top-3 -right-6 bg-amber-400 text-slate-950 font-black text-xs px-2.5 py-1 rounded shadow-lg uppercase tracking-wider">
+                        100% Вайб!
+                    </span>
+                </div>
+
+                <!-- Central Menu Buttons Container (Minecraft Style Stack) -->
+                <div class="w-full space-y-3 mb-6">
+                    <button id="btnStartGame" class="btn-menu w-full py-3.5 rounded-xl font-bold text-base bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25 border border-cyan-300/30">
+                        <i class="fa-solid fa-play mr-2"></i> ИГРАТЬ
+                    </button>
+
+                    <button id="btnOpenTheme" class="btn-menu w-full py-3 rounded-xl font-semibold bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700">
+                        <i class="fa-solid fa-palette mr-2 text-cyan-400"></i> Стиль Игры: <span id="lblCurrentTheme" class="text-cyan-400 font-bold">Киберпанк</span>
+                    </button>
+
+                    <button id="btnOpenDifficulty" class="btn-menu w-full py-3 rounded-xl font-semibold bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700">
+                        <i class="fa-solid fa-gauge-high mr-2 text-amber-400"></i> Сложность: <span id="lblCurrentDiff" class="text-amber-400 font-bold">Средняя</span>
+                    </button>
+
+                    <button id="btnOpenRules" class="btn-menu w-full py-3 rounded-xl font-semibold bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700">
+                        <i class="fa-solid fa-book-open mr-2 text-fuchsia-400"></i> Правила и Управление
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUB-MODAL 1: Theme Select -->
+        <div id="themeModal" class="hidden absolute inset-0 glass-panel rounded-2xl flex flex-col items-center justify-center p-6 z-40">
+            <div class="max-w-md w-full bg-slate-900/95 p-6 rounded-2xl border border-slate-700 shadow-2xl">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-xl font-bold text-white"><i class="fa-solid fa-palette text-cyan-400 mr-2"></i>Выберите Стиль</h3>
+                    <button class="btnCloseSubModal text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+                <div class="space-y-3 mb-6">
+                    <button data-theme="viking" class="btnSelectTheme btn-menu w-full p-4 rounded-xl border border-amber-500/30 bg-amber-950/30 hover:bg-amber-900/40 text-left flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-amber-400"><i class="fa-solid fa-shield-halved mr-2"></i>Викинги (Средневековье)</div>
+                            <div class="text-xs text-slate-400 mt-1">Заснеженные горы, топоры и рунические щиты</div>
+                        </div>
+                    </button>
+                    <button data-theme="cyber" class="btnSelectTheme btn-menu w-full p-4 rounded-xl border border-cyan-500/30 bg-cyan-950/30 hover:bg-cyan-900/40 text-left flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-cyan-400"><i class="fa-solid fa-microchip mr-2"></i>Киберпанк</div>
+                            <div class="text-xs text-slate-400 mt-1">Неоновые огни, лазерные стены и дроны</div>
+                        </div>
+                    </button>
+                    <button data-theme="minimal" class="btnSelectTheme btn-menu w-full p-4 rounded-xl border border-slate-600 bg-slate-800/40 hover:bg-slate-700/40 text-left flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-slate-200"><i class="fa-solid fa-shapes mr-2"></i>Минимализм</div>
+                            <div class="text-xs text-slate-400 mt-1">Лаконичные геометрические формы и контраст</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUB-MODAL 2: Difficulty Select -->
+        <div id="diffModal" class="hidden absolute inset-0 glass-panel rounded-2xl flex flex-col items-center justify-center p-6 z-40">
+            <div class="max-w-md w-full bg-slate-900/95 p-6 rounded-2xl border border-slate-700 shadow-2xl">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-xl font-bold text-white"><i class="fa-solid fa-gauge-high text-amber-400 mr-2"></i>Уровень Сложности</h3>
+                    <button class="btnCloseSubModal text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+                <div class="space-y-3 mb-6">
+                    <button data-diff="easy" class="btnSelectDiff btn-menu w-full p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 hover:bg-emerald-900/40 text-left">
+                        <div class="font-bold text-emerald-400">Легкий</div>
+                        <div class="text-xs text-slate-400 mt-1">Низкая скорость, свободное появление врагов</div>
+                    </button>
+                    <button data-diff="medium" class="btnSelectDiff btn-menu w-full p-4 rounded-xl border border-amber-500/30 bg-amber-950/30 hover:bg-amber-900/40 text-left">
+                        <div class="font-bold text-amber-400">Средний</div>
+                        <div class="text-xs text-slate-400 mt-1">Стандартный темп и баланс препятствий</div>
+                    </button>
+                    <button data-diff="hard" class="btnSelectDiff btn-menu w-full p-4 rounded-xl border border-rose-500/30 bg-rose-950/30 hover:bg-rose-900/40 text-left">
+                        <div class="font-bold text-rose-400">Сложный (Испытание)</div>
+                        <div class="text-xs text-slate-400 mt-1">Высокая скорость сразу, частые двойные препятствия</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUB-MODAL 3: Rules & Controls -->
+        <div id="rulesModal" class="hidden absolute inset-0 glass-panel rounded-2xl flex flex-col items-center justify-center p-6 z-40">
+            <div class="max-w-md w-full bg-slate-900/95 p-6 rounded-2xl border border-slate-700 shadow-2xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold text-white"><i class="fa-solid fa-book-open text-fuchsia-400 mr-2"></i>Правила и Управление</h3>
+                    <button class="btnCloseSubModal text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+                <div class="space-y-3 text-xs text-slate-300 mb-6">
+                    <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                        <span class="font-bold text-cyan-400 block mb-1">Управление:</span>
+                        <ul class="space-y-1">
+                            <li>• <kbd class="px-1.5 py-0.5 bg-slate-700 rounded font-mono">Пробел</kbd> / <kbd class="px-1.5 py-0.5 bg-slate-700 rounded font-mono">↑</kbd> — Прыжок</li>
+                            <li>• В воздухе нажатие еще раз — <strong>Двойной прыжок</strong></li>
+                            <li>• <kbd class="px-1.5 py-0.5 bg-slate-700 rounded font-mono">↓</kbd> / Нажатие внизу экрана — <strong>Пригнуться</strong></li>
+                            <li>• Сенсорный экран: Нажатие сверху — прыжок, свайп вниз — приседание.</li>
+                        </ul>
+                    </div>
+                    <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                        <span class="font-bold text-amber-400 block mb-1">Бонусы на карте:</span>
+                        <p>• <strong>(S) Щит:</strong> Поглощает 1 столкновение с препятствием.</p>
+                        <p>• <strong>(B) Ускорение:</strong> Дает временно высокую скорость и неуязвимость.</p>
+                    </div>
+                </div>
+                <button class="btnCloseSubModal btn-menu w-full py-3 rounded-xl font-semibold bg-slate-800 text-white hover:bg-slate-700">Понятно!</button>
+            </div>
+        </div>
+
+        <!-- OVERLAY: Pause -->
+        <div id="pauseOverlay" class="hidden absolute inset-0 glass-panel rounded-2xl flex flex-col items-center justify-center p-6 z-30">
+            <div class="text-center max-w-sm w-full">
+                <i class="fa-solid fa-pause text-4xl text-cyan-400 mb-3 animate-pulse"></i>
+                <h2 class="text-3xl font-bold text-white mb-6">ПАУЗА</h2>
+                <div class="space-y-3">
+                    <button id="btnResume" class="btn-menu w-full py-3.5 rounded-xl font-semibold bg-cyan-500 text-white shadow-lg">Продолжить</button>
+                    <button id="btnQuit" class="btn-menu w-full py-3.5 rounded-xl font-semibold bg-slate-800 text-slate-300 border border-slate-700">В Главное Меню</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- OVERLAY: Game Over -->
+        <div id="gameOverOverlay" class="hidden absolute inset-0 glass-panel rounded-2xl flex flex-col items-center justify-center p-6 z-30">
+            <div class="text-center max-w-md w-full">
+                <div class="w-16 h-16 mx-auto rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center mb-4 text-rose-400">
+                    <i class="fa-solid fa-skull text-3xl"></i>
+                </div>
+                <h2 class="text-3xl sm:text-4xl font-black mb-1 text-white">ЗАБЕГ ОКОНЧЕН</h2>
+                <p id="finalScoreText" class="text-cyan-400 font-bold text-lg mb-6">Дистанция: 00000m</p>
+
+                <div class="flex gap-4">
+                    <button id="btnRestart" class="btn-menu flex-1 py-3.5 rounded-xl font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-amber-400 shadow-lg">
+                        ЕЩЕ РАЗ
+                    </button>
+                    <button id="btnMenuFromOver" class="btn-menu px-6 py-3.5 rounded-xl font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                        Меню
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Controls Footer -->
+    <footer class="w-full max-w-5xl flex justify-between items-center text-xs text-slate-400 px-2 py-1">
+        <div class="flex items-center gap-4">
+            <span><kbd class="px-2 py-0.5 bg-slate-800 rounded text-slate-300">Space / ↑</kbd> Прыжок</span>
+            <span><kbd class="px-2 py-0.5 bg-slate-800 rounded text-slate-300">↓</kbd> Наклон</span>
+        </div>
+        <div>
+            <span><kbd class="px-2 py-0.5 bg-slate-800 rounded text-slate-300">P</kbd> Пауза</span>
+        </div>
+    </footer>
+
+    <script>
+        /** Audio Synthesizer */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) this.ctx = new AudioContext();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+            playJump() {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(500, now + 0.12);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(now + 0.12);
+            }
+            playPowerup() {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(350, now);
+                osc.frequency.setValueAtTime(600, now + 0.1);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(now + 0.2);
+            }
+            playCrash() {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(140, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.25);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(now + 0.25);
+            }
+            playClick() {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(700, now);
+                osc.frequency.exponentialRampToValueAtTime(300, now + 0.04);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(now + 0.04);
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        /** Particle Engine */
+        class Particle {
+            constructor(x, y, color, vx, vy, size = 3, life = 0.5) {
+                this.x = x; this.y = y; this.color = color;
+                this.vx = vx || (Math.random() - 0.5) * 4;
+                this.vy = vy || (Math.random() - 0.5) * 4;
+                this.size = size; this.alpha = 1;
+                this.decay = 1 / (life * 60);
+            }
+            update() { this.x += this.vx; this.y += this.vy; this.alpha -= this.decay; }
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        /** Main Game Engine */
+        class RunnerGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.width = 1200;
+                this.height = 600;
+                this.groundY = 490;
+
+                // State Flags
+                this.inMenuMode = true;
+                this.isRunning = false;
+                this.isPaused = false;
+
+                this.score = 0;
+                this.highScore = parseInt(localStorage.getItem('runner_highscore') || '0', 10);
+                
+                // Configs
+                this.currentTheme = 'cyber'; // 'cyber' | 'viking' | 'minimal'
+                this.currentDiff = 'medium'; // 'easy' | 'medium' | 'hard'
+
+                this.themeConfigs = {
+                    cyber: {
+                        name: 'Киберпанк',
+                        fontClass: 'theme-cyber',
+                        title: 'CYBER RUNNER',
+                        subTitle: '2077',
+                        icon: 'fa-microchip',
+                        colorAccent: '#00f2fe',
+                        bgTop: '#080a14', bgBottom: '#10172a',
+                        groundColor: '#00f2fe',
+                        playerColor: '#00f2fe',
+                        obsColor: '#ff007f',
+                        splashes: ['100% Киберпанк!', 'Неон и Лазеры!', 'Скорость 2077!']
+                    },
+                    viking: {
+                        name: 'Викинги',
+                        fontClass: 'theme-viking',
+                        title: 'VIKING RUNNER',
+                        subTitle: 'VALHALLA',
+                        icon: 'fa-shield-halved',
+                        colorAccent: '#f59e0b',
+                        bgTop: '#0f172a', bgBottom: '#1e293b',
+                        groundColor: '#cbd5e1',
+                        playerColor: '#f59e0b',
+                        obsColor: '#ef4444',
+                        splashes: ['В Вальхаллу!', 'За Одина!', 'Заснеженные горы!']
+                    },
+                    minimal: {
+                        name: 'Минимализм',
+                        fontClass: 'theme-minimal',
+                        title: 'MINIMAL RUN',
+                        subTitle: 'CLEAN',
+                        icon: 'fa-shapes',
+                        colorAccent: '#f8fafc',
+                        bgTop: '#18181b', bgBottom: '#09090b',
+                        groundColor: '#52525b',
+                        playerColor: '#f8fafc',
+                        obsColor: '#a1a1aa',
+                        splashes: ['Чистый Стиль!', 'Геометрия!', 'Форма и Движение!']
+                    }
+                };
+
+                this.diffConfigs = {
+                    easy: { name: 'Легкий', baseSpeed: 6.5, maxSpeed: 13, spawnIntervalMult: 1.3 },
+                    medium: { name: 'Средний', baseSpeed: 8.5, maxSpeed: 17, spawnIntervalMult: 1.0 },
+                    hard: { name: 'Сложный', baseSpeed: 11.0, maxSpeed: 22, spawnIntervalMult: 0.75 }
+                };
+
+                // Player
+                this.player = {
+                    x: 100, y: this.groundY - 70,
+                    w: 50, h: 70, normalH: 70, duckH: 40,
+                    vy: 0, gravity: 0.85, jumpForce: -16.5,
+                    isGrounded: true, isDucking: false,
+                    doubleJumpAvailable: false,
+                    shieldActive: false, boostActive: false,
+                    trail: []
+                };
+
+                this.obstacles = [];
+                this.powerups = [];
+                this.particles = [];
+                this.bgStars = [];
+                this.bgMountains = [];
+                this.spawnTimer = 0;
+                this.powerupTimer = 0;
+
+                this.initListeners();
+                this.initBackground();
+                this.resizeCanvas();
+                this.applyTheme(this.currentTheme);
+                this.applyDifficulty(this.currentDiff);
+                this.updateScoreDisplay();
+
+                // Start ambient animation in menu mode
+                this.menuLoop();
+            }
+
+            initListeners() {
+                window.addEventListener('resize', () => this.resizeCanvas());
+
+                window.addEventListener('keydown', (e) => {
+                    if (e.code === 'KeyP') {
+                        if (this.isRunning) this.togglePause();
+                        return;
+                    }
+                    if (!this.isRunning || this.isPaused) return;
+
+                    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                        this.jump();
+                    } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                        this.duck(true);
+                    }
+                });
+
+                window.addEventListener('keyup', (e) => {
+                    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                        this.duck(false);
+                    }
+                });
+
+                // Touch support
+                let touchStartY = 0;
+                this.canvas.addEventListener('touchstart', (e) => {
+                    if (!this.isRunning || this.isPaused) return;
+                    touchStartY = e.touches[0].clientY;
+                    this.jump();
+                }, { passive: true });
+
+                this.canvas.addEventListener('touchmove', (e) => {
+                    if (!this.isRunning || this.isPaused) return;
+                    if (e.touches[0].clientY - touchStartY > 35) this.duck(true);
+                }, { passive: true });
+
+                this.canvas.addEventListener('touchend', () => this.duck(false), { passive: true });
+            }
+
+            resizeCanvas() {
+                this.canvas.width = this.width;
+                this.canvas.height = this.height;
+            }
+
+            initBackground() {
+                this.bgStars = [];
+                for (let i = 0; i < 50; i++) {
+                    this.bgStars.push({
+                        x: Math.random() * this.width,
+                        y: Math.random() * (this.height - 180),
+                        size: Math.random() * 2 + 1,
+                        alpha: Math.random() * 0.8 + 0.2
+                    });
+                }
+
+                this.bgMountains = [];
+                let currentX = 0;
+                while (currentX < this.width + 200) {
+                    const w = Math.random() * 120 + 80;
+                    const h = Math.random() * 160 + 60;
+                    this.bgMountains.push({ x: currentX, w, h });
+                    currentX += w - 20;
+                }
+            }
+
+            applyTheme(themeKey) {
+                this.currentTheme = themeKey;
+                const cfg = this.themeConfigs[themeKey];
+                
+                document.body.className = `h-screen w-screen flex flex-col justify-between items-center p-2 sm:p-4 select-none overflow-hidden ${cfg.fontClass}`;
+                document.getElementById('lblCurrentTheme').textContent = cfg.name;
+                document.getElementById('mainTitleText').textContent = cfg.title;
+                
+                const splash = cfg.splashes[Math.floor(Math.random() * cfg.splashes.length)];
+                document.getElementById('splashText').textContent = splash;
+
+                document.getElementById('appTitle').innerHTML = `${cfg.title.split(' ')[0]}<span class="text-cyan-400"> ${cfg.subTitle}</span>`;
+                document.getElementById('themeIcon').innerHTML = `<i class="fa-solid ${cfg.icon}"></i>`;
+            }
+
+            applyDifficulty(diffKey) {
+                this.currentDiff = diffKey;
+                const cfg = this.diffConfigs[diffKey];
+                document.getElementById('lblCurrentDiff').textContent = cfg.name;
+                document.getElementById('difficultyBadge').textContent = `Сложность: ${cfg.name}`;
+            }
+
+            startNewGame() {
+                sound.init();
+                this.inMenuMode = false;
+                this.score = 0;
+                const diffCfg = this.diffConfigs[this.currentDiff];
+                this.gameSpeed = diffCfg.baseSpeed;
+                
+                this.obstacles = [];
+                this.powerups = [];
+                this.particles = [];
+                this.spawnTimer = 0;
+
+                this.player.y = this.groundY - this.player.normalH;
+                this.player.vy = 0;
+                this.player.isGrounded = true;
+                this.player.shieldActive = false;
+                this.player.boostActive = false;
+
+                this.isRunning = true;
+                this.isPaused = false;
+
+                document.getElementById('menuOverlay').classList.add('hidden');
+                document.getElementById('pauseOverlay').classList.add('hidden');
+                document.getElementById('gameOverOverlay').classList.add('hidden');
+
+                this.gameLoop();
+            }
+
+            togglePause() {
+                this.isPaused = !this.isPaused;
+                document.getElementById('pauseOverlay').classList.toggle('hidden', !this.isPaused);
+                if (!this.isPaused) this.gameLoop();
+            }
+
+            jump() {
+                if (this.player.isGrounded) {
+                    this.player.vy = this.player.jumpForce;
+                    this.player.isGrounded = false;
+                    this.player.doubleJumpAvailable = true;
+                    sound.playJump();
+                } else if (this.player.doubleJumpAvailable) {
+                    this.player.vy = this.player.jumpForce * 0.88;
+                    this.player.doubleJumpAvailable = false;
+                    sound.playJump();
+                }
+            }
+
+            duck(isDucking) {
+                if (this.player.isDucking === isDucking) return;
+                this.player.isDucking = isDucking;
+                this.player.h = isDucking ? this.player.duckH : this.player.normalH;
+                if (this.player.isGrounded) {
+                    this.player.y = this.groundY - this.player.h;
+                }
+            }
+
+            spawnObstacle() {
+                const diffCfg = this.diffConfigs[this.currentDiff];
+                const types = ['crate', 'laserLow', 'laserHigh'];
+                const choice = types[Math.floor(Math.random() * types.length)];
+                
+                const cfg = this.themeConfigs[this.currentTheme];
+
+                if (choice === 'crate') {
+                    this.obstacles.push({ type: 'crate', x: this.width + 50, y: this.groundY - 50, w: 45, h: 50, color: cfg.obsColor });
+                } else if (choice === 'laserLow') {
+                    this.obstacles.push({ type: 'laserLow', x: this.width + 50, y: this.groundY - 35, w: 60, h: 35, color: '#e11d48' });
+                } else if (choice === 'laserHigh') {
+                    this.obstacles.push({ type: 'laserHigh', x: this.width + 50, y: this.groundY - 80, w: 70, h: 35, color: '#f59e0b' });
+                }
+            }
+
+            spawnPowerup() {
+                const choice = Math.random() > 0.5 ? 'shield' : 'boost';
+                this.powerups.push({ type: choice, x: this.width + 50, y: this.groundY - 110, w: 30, h: 30 });
+            }
+
+            update() {
+                const diffCfg = this.diffConfigs[this.currentDiff];
+                this.score += 1;
+                this.updateScoreDisplay();
+
+                const effectiveSpeed = this.player.boostActive ? this.gameSpeed * 1.5 : this.gameSpeed;
+                this.gameSpeed = Math.min(diffCfg.maxSpeed, diffCfg.baseSpeed + (this.score / 1400));
+
+                // Player Physics
+                this.player.vy += this.player.gravity;
+                this.player.y += this.player.vy;
+
+                const curH = this.player.isDucking ? this.player.duckH : this.player.normalH;
+                if (this.player.y >= this.groundY - curH) {
+                    this.player.y = this.groundY - curH;
+                    this.player.vy = 0;
+                    this.player.isGrounded = true;
+                }
+
+                // Obstacle Spawning Logic
+                this.spawnTimer++;
+                const spawnLimit = Math.max(40, (100 - this.gameSpeed * 3) * diffCfg.spawnIntervalMult);
+                if (this.spawnTimer > spawnLimit) {
+                    this.spawnObstacle();
+                    this.spawnTimer = 0;
+                }
+
+                // Powerup Spawning
+                this.powerupTimer++;
+                if (this.powerupTimer > 400) {
+                    this.spawnPowerup();
+                    this.powerupTimer = 0;
+                }
+
+                // Move Mountains & Background
+                this.bgMountains.forEach(m => m.x -= effectiveSpeed * 0.2);
+                if (this.bgMountains[0] && this.bgMountains[0].x + this.bgMountains[0].w < 0) {
+                    const first = this.bgMountains.shift();
+                    const lastX = this.bgMountains[this.bgMountains.length - 1].x + this.bgMountains[this.bgMountains.length - 1].w;
+                    first.x = lastX - 20;
+                    this.bgMountains.push(first);
+                }
+
+                // Obstacles Collision
+                for (let i = this.obstacles.length - 1; i >= 0; i--) {
+                    const obs = this.obstacles[i];
+                    obs.x -= effectiveSpeed;
+
+                    const pBox = { x: this.player.x + 5, y: this.player.y + 5, w: this.player.w - 10, h: curH - 10 };
+                    if (
+                        pBox.x < obs.x + obs.w && pBox.x + pBox.w > obs.x &&
+                        pBox.y < obs.y + obs.h && pBox.y + pBox.h > obs.y
+                    ) {
+                        if (this.player.shieldActive) {
+                            this.player.shieldActive = false;
+                            sound.playCrash();
+                            this.obstacles.splice(i, 1);
+                        } else if (!this.player.boostActive) {
+                            this.gameOver();
+                            return;
+                        }
+                    }
+
+                    if (obs.x + obs.w < -50) this.obstacles.splice(i, 1);
+                }
+
+                // Powerups Pickup
+                for (let i = this.powerups.length - 1; i >= 0; i--) {
+                    const pw = this.powerups[i];
+                    pw.x -= effectiveSpeed;
+                    if (
+                        this.player.x < pw.x + pw.w && this.player.x + this.player.w > pw.x &&
+                        this.player.y < pw.y + pw.h && this.player.y + curH > pw.y
+                    ) {
+                        sound.playPowerup();
+                        if (pw.type === 'shield') this.player.shieldActive = true;
+                        if (pw.type === 'boost') {
+                            this.player.boostActive = true;
+                            setTimeout(() => { this.player.boostActive = false; }, 4000);
+                        }
+                        this.powerups.splice(i, 1);
+                    }
+                    if (pw.x + pw.w < -50) this.powerups.splice(i, 1);
+                }
+            }
+
+            updateScoreDisplay() {
+                document.getElementById('scoreCurrent').textContent = String(this.score).padStart(5, '0');
+                document.getElementById('scoreHigh').textContent = String(this.highScore).padStart(5, '0');
+            }
+
+            gameOver() {
+                this.isRunning = false;
+                sound.playCrash();
+
+                if (this.score > this.highScore) {
+                    this.highScore = this.score;
+                    localStorage.setItem('runner_highscore', this.highScore.toString());
+                    this.updateScoreDisplay();
+                }
+
+                document.getElementById('finalScoreText').textContent = `Дистанция: ${String(this.score).padStart(5, '0')}m`;
+                document.getElementById('gameOverOverlay').classList.remove('hidden');
+            }
+
+            draw() {
+                const cfg = this.themeConfigs[this.currentTheme];
+
+                // Background
+                const bgGrad = this.ctx.createLinearGradient(0, 0, 0, this.height);
+                bgGrad.addColorStop(0, cfg.bgTop);
+                bgGrad.addColorStop(1, cfg.bgBottom);
+                this.ctx.fillStyle = bgGrad;
+                this.ctx.fillRect(0, 0, this.width, this.height);
+
+                // Stars/Decorations
+                if (this.currentTheme !== 'minimal') {
+                    this.ctx.fillStyle = '#ffffff';
+                    this.bgStars.forEach(s => {
+                        this.ctx.globalAlpha = s.alpha;
+                        this.ctx.fillRect(s.x, s.y, s.size, s.size);
+                    });
+                    this.ctx.globalAlpha = 1;
+
+                    // Mountains/Silhouette Layer
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+                    this.bgMountains.forEach(m => {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(m.x, this.groundY);
+                        this.ctx.lineTo(m.x + m.w / 2, this.groundY - m.h);
+                        this.ctx.lineTo(m.x + m.w, this.groundY);
+                        this.ctx.fill();
+                    });
+                }
+
+                // Ground Line
+                this.ctx.strokeStyle = cfg.groundColor;
+                this.ctx.lineWidth = 3;
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, this.groundY);
+                this.ctx.lineTo(this.width, this.groundY);
+                this.ctx.stroke();
+
+                // Player Avatar
+                const curH = this.player.isDucking ? this.player.duckH : this.player.normalH;
+                this.ctx.fillStyle = cfg.playerColor;
+                
+                if (this.currentTheme === 'cyber') {
+                    this.ctx.shadowBlur = 15;
+                    this.ctx.shadowColor = cfg.playerColor;
+                } else {
+                    this.ctx.shadowBlur = 0;
+                }
+
+                this.ctx.beginPath();
+                this.ctx.roundRect(this.player.x, this.player.y, this.player.w, curH, [8]);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+
+                // Player Eye/Details
+                this.ctx.fillStyle = '#000';
+                this.ctx.fillRect(this.player.x + this.player.w - 14, this.player.y + 10, 8, 6);
+
+                // Shield Effect
+                if (this.player.shieldActive) {
+                    this.ctx.strokeStyle = '#00f2fe';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.player.x + this.player.w / 2, this.player.y + curH / 2, 42, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                }
+
+                // Draw Obstacles
+                this.obstacles.forEach(obs => {
+                    this.ctx.fillStyle = obs.color;
+                    this.ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                });
+
+                // Draw Powerups
+                this.powerups.forEach(pw => {
+                    this.ctx.fillStyle = pw.type === 'shield' ? '#00f2fe' : '#f59e0b';
+                    this.ctx.beginPath();
+                    this.ctx.arc(pw.x + 15, pw.y + 15, 14, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+            }
+
+            menuLoop() {
+                if (this.inMenuMode) {
+                    // Ambient menu movement preview
+                    this.bgMountains.forEach(m => m.x -= 0.5);
+                    if (this.bgMountains[0] && this.bgMountains[0].x + this.bgMountains[0].w < 0) {
+                        const first = this.bgMountains.shift();
+                        first.x = this.width;
+                        this.bgMountains.push(first);
+                    }
+                    this.draw();
+                    requestAnimationFrame(() => this.menuLoop());
+                }
+            }
+
+            gameLoop() {
+                if (!this.isRunning || this.isPaused) return;
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+
+        // DOM Initializations & Event Handlers
+        window.addEventListener('DOMContentLoaded', () => {
+            const game = new RunnerGame();
+
+            // Main Menu Buttons
+            document.getElementById('btnStartGame').addEventListener('click', () => {
+                sound.playClick();
+                game.startNewGame();
+            });
+
+            document.getElementById('btnOpenTheme').addEventListener('click', () => {
+                sound.playClick();
+                document.getElementById('themeModal').classList.remove('hidden');
+            });
+
+            document.getElementById('btnOpenDifficulty').addEventListener('click', () => {
+                sound.playClick();
+                document.getElementById('diffModal').classList.remove('hidden');
+            });
+
+            document.getElementById('btnOpenRules').addEventListener('click', () => {
+                sound.playClick();
+                document.getElementById('rulesModal').classList.remove('hidden');
+            });
+
+            // Close SubModals
+            document.querySelectorAll('.btnCloseSubModal').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    sound.playClick();
+                    document.getElementById('themeModal').classList.add('hidden');
+                    document.getElementById('diffModal').classList.add('hidden');
+                    document.getElementById('rulesModal').classList.add('hidden');
+                });
+            });
+
+            // Theme Selection
+            document.querySelectorAll('.btnSelectTheme').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    sound.playClick();
+                    const theme = e.currentTarget.getAttribute('data-theme');
+                    game.applyTheme(theme);
+                    document.getElementById('themeModal').classList.add('hidden');
+                });
+            });
+
+            // Difficulty Selection
+            document.querySelectorAll('.btnSelectDiff').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    sound.playClick();
+                    const diff = e.currentTarget.getAttribute('data-diff');
+                    game.applyDifficulty(diff);
+                    document.getElementById('diffModal').classList.add('hidden');
+                });
+            });
+
+            // Gameplay Overlay Buttons
+            document.getElementById('btnRestart').addEventListener('click', () => game.startNewGame());
+            document.getElementById('btnResume').addEventListener('click', () => game.togglePause());
+            document.getElementById('btnPause').addEventListener('click', () => {
+                if (game.isRunning) game.togglePause();
+            });
+
+            const returnToMenu = () => {
+                sound.playClick();
+                game.isRunning = false;
+                game.isPaused = false;
+                game.inMenuMode = true;
+                document.getElementById('pauseOverlay').classList.add('hidden');
+                document.getElementById('gameOverOverlay').classList.add('hidden');
+                document.getElementById('menuOverlay').classList.remove('hidden');
+                game.menuLoop();
+            };
+
+            document.getElementById('btnQuit').addEventListener('click', returnToMenu);
+            document.getElementById('btnMenuFromOver').addEventListener('click', returnToMenu);
+
+            const btnSound = document.getElementById('btnSound');
+            btnSound.addEventListener('click', () => {
+                sound.enabled = !sound.enabled;
+                btnSound.innerHTML = sound.enabled
+                    ? '<i class="fa-solid fa-volume-high text-sm"></i>'
+                    : '<i class="fa-solid fa-volume-xmark text-sm text-rose-400"></i>';
+            });
+        });
+    </script>
+</body>
+</html>
